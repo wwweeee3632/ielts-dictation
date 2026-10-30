@@ -273,14 +273,14 @@ function renderHome(){
 
 // ---------- dictation flow ----------
 function start(chapterName, reviewing){
-  const ch = WORDS.chapters.find(c=>c.name===chapterName);
-  if(!ch) return;
-  let words;
+  let ch = null, words;
   if(reviewing){
     const map = wrongMap();
     words = Object.values(map).map(o=> WORD_INDEX[norm(o.w)] || {w:o.w, m:o.m, a:null});
     if(words.length===0){ alert('还没有错词，先去练一练吧'); return; }
   } else {
+    ch = WORDS.chapters.find(c=>c.name===chapterName);
+    if(!ch) return;
     words = ch.words;
   }
   state.chapter = reviewing ? {name:'错词复习', words} : ch;
