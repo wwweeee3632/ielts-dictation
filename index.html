@@ -111,6 +111,7 @@
       <button class="back" id="backBtn">←</button>
       <div class="title" id="dictTitle">章节</div>
       <div class="counter" id="dictCounter"></div>
+      <button class="back" id="restartBtn" title="重新开始">↻</button>
     </div>
     <div class="progress"><div class="bar" id="progressBar"></div></div>
     <div class="meaning" id="meaning">—</div>
@@ -132,6 +133,7 @@ const WORDS = {"chapters":[{"name":"3.2 预测试","words":[{"w":"bananas","m":"
 const LS_WRONG = 'ielts_wrong_v1';
 const LS_STAT  = 'ielts_stat_v1';
 const LS_PREF  = 'ielts_pref_v1';
+const LS_PROGRESS = 'ielts_progress_v1';
 const load = (k, d)=>{ try{ const v = localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } };
 const save = (k, v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
 
@@ -227,6 +229,20 @@ function removeWrong(k){
   const map = wrongMap(); delete map[k]; save(LS_WRONG, map);
 }
 
+// ---------- 断点续练 ----------
+function progressMap(){ return load(LS_PROGRESS, {}); }
+function progressKey(){ return state.reviewing ? '错词复习' : (state.chapter ? state.chapter.name : ''); }
+function saveProgress(){
+  const key = progressKey();
+  if(!key || !state.queue || !state.queue.length) return;
+  const pm = progressMap();
+  pm[key] = { queue: state.queue.map(w=>norm(w.w)), idx: state.idx, done: state.session.done, correct: state.session.correct };
+  save(LS_PROGRESS, pm);
+}
+function clearProgress(key){
+  const pm = progressMap(); delete pm[key||progressKey()]; save(LS_PROGRESS, pm);
+}
+
 // ---------- stats ----------
 function statMap(){ return load(LS_STAT, {}); }
 function addStat(chapter, correct){
@@ -265,7 +281,9 @@ function renderHome(){
     html.push(`<div class="section-title">${SECTION_LABEL[key]||('第'+key+'章')}</div>`);
     for(const ch of groups[key]){
       const done = (st[ch.name]||{done:0}).done;
-      html.push(`<button class="ch" data-name="${ch.name}"><span class="name">${ch.name}</span><span class="cnt">${done}/${ch.words.length}</span></button>`);
+      const prog = progressMap()[ch.name];
+      const resumeTag = prog && Array.isArray(prog.queue) ? `<span class="tag">续${(prog.idx||0)+1}</span>` : '';
+      html.push(`<button class="ch" data-name="${ch.name}"><span class="name">${ch.name}${resumeTag}</span><span class="cnt">${done}/${ch.words.length}</span></button>`);
     }
   }
   $('chapterList').innerHTML = html.join('');
@@ -273,7 +291,9 @@ function renderHome(){
 
 // ---------- dictation flow ----------
 function start(chapterName, reviewing){
-  let ch = null, words;
+  const key = reviewing ? '错词复习' : chapterName;
+  const saved = progressMap()[key];
+  let ch = null, words, resumed = false;
   if(reviewing){
     const map = wrongMap();
     words = Object.values(map).map(o=> WORD_INDEX[norm(o.w)] || {w:o.w, m:o.m, a:null});
@@ -285,9 +305,23 @@ function start(chapterName, reviewing){
   }
   state.chapter = reviewing ? {name:'错词复习', words} : ch;
   state.reviewing = reviewing;
-  state.queue = state.mode==='random' ? shuffle(words) : words.slice();
-  state.idx = 0;
-  state.session = {done:0, correct:0};
+
+  // 断点续练：恢复上次未完成的进度
+  if(saved && Array.isArray(saved.queue) && saved.queue.length){
+    const restored = saved.queue.map(k=> WORD_INDEX[k]).filter(Boolean);
+    if(restored.length){
+      state.queue = restored;
+      state.idx = Math.min(saved.idx||0, restored.length-1);
+      state.session = {done: saved.done||0, correct: saved.correct||0};
+      resumed = true;
+    }
+  }
+  if(!resumed){
+    state.queue = state.mode==='random' ? shuffle(words) : words.slice();
+    state.idx = 0;
+    state.session = {done:0, correct:0};
+  }
+
   $('home').style.display='none';
   $('dict').style.display='block';
   $('dictTitle').textContent = state.chapter.name;
@@ -325,6 +359,7 @@ function submit(){
   }
   if(!state.reviewing) addStat(state.chapter, ok);
   state.session.done++; if(ok) state.session.correct++;
+  saveProgress();
   $('submitBtn').style.display='none';
   $('nextBtn').style.display='';
   $('nextBtn').textContent = state.idx+1>=state.queue.length ? '完成' : '下一个 →';
@@ -333,10 +368,12 @@ function submit(){
 
 function next(){
   if(state.idx+1 >= state.queue.length){
+    clearProgress();
     finish();
     return;
   }
   state.idx++;
+  saveProgress();
   showWord();
 }
 
@@ -363,6 +400,7 @@ function finish(){
 }
 
 function backHome(){
+  saveProgress();
   stopSpeech();
   $('dict').style.display='none';
   $('home').style.display='block';
@@ -401,6 +439,20 @@ $('answer').addEventListener('keydown', e=>{
   }
 });
 $('backBtn').addEventListener('click', backHome);
+let restartArmed = false, restartTimer = null;
+$('restartBtn').addEventListener('click', ()=>{
+  if(!restartArmed){
+    restartArmed = true;
+    $('restartBtn').textContent = '确认?';
+    restartTimer = setTimeout(()=>{ restartArmed=false; $('restartBtn').textContent='↻'; }, 3000);
+    return;
+  }
+  clearTimeout(restartTimer);
+  restartArmed = false;
+  $('restartBtn').textContent = '↻';
+  clearProgress();
+  start(state.reviewing ? null : state.chapter.name, state.reviewing);
+});
 
 // ---------- init ----------
 (function init(){
