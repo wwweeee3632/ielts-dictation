@@ -142,9 +142,10 @@ let state = {
   session:{done:0, correct:0}
 };
 
-// ---------- TTS ----------
+// ---------- 发音（预生成音频优先，兼容微信/夸克/百度；Edge/Chrome 可回退系统 TTS）----------
+let audioEl = null;
 let voice = null;
-let _lastUtter = null; // 保留引用，防止 iOS 垃圾回收导致不发声
+let _lastUtter = null;
 function refreshVoices(){
   try{
     const vs = speechSynthesis.getVoices();
@@ -159,17 +160,14 @@ function refreshVoices(){
 if('speechSynthesis' in window){
   speechSynthesis.onvoiceschanged = refreshVoices;
   refreshVoices();
-  // 首次触摸/点击时预热语音引擎（部分手机浏览器需要一次交互才允许发声）
   const warm = function(){ refreshVoices(); };
   document.addEventListener('pointerdown', warm, {once:true});
   document.addEventListener('touchstart', warm, {once:true});
 }
-function speak(text){
+function ttsFallback(text){
   if(!('speechSynthesis' in window)) return;
   try{
     speechSynthesis.cancel();
-    refreshVoices();
-    // iOS 上 cancel 后需稍等再 speak，否则可能静音
     setTimeout(function(){
       try{
         const u = new SpeechSynthesisUtterance(text);
@@ -182,6 +180,23 @@ function speak(text){
       }catch(e){}
     }, 60);
   }catch(e){}
+}
+function speak(word){
+  const text = word.w;
+  if(word.a){
+    try{
+      if(!audioEl) audioEl = new Audio();
+      audioEl.src = 'audio/' + word.a;
+      const p = audioEl.play();
+      if(p && p.catch) p.catch(function(){ ttsFallback(text); });
+      return;
+    }catch(e){}
+  }
+  ttsFallback(text);
+}
+function stopSpeech(){
+  try{ if(audioEl){ audioEl.pause(); audioEl.src=''; } }catch(e){}
+  if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
 }
 
 // ---------- utils ----------
@@ -279,7 +294,7 @@ function showWord(){
   $('nextBtn').style.display='none';
   $('dictCounter').textContent = `${state.idx+1}/${state.queue.length}`;
   $('progressBar').style.width = `${(state.idx/state.queue.length)*100}%`;
-  if(state.autoSpeak) speak(w.w);
+  if(state.autoSpeak) speak(w);
 }
 
 function submit(){
@@ -338,7 +353,7 @@ function finish(){
 }
 
 function backHome(){
-  speechSynthesis.cancel();
+  stopSpeech();
   $('dict').style.display='none';
   $('home').style.display='block';
   // restore hidden elements
@@ -365,7 +380,7 @@ $('autoSpeak').addEventListener('change', e=>{
   save(LS_PREF, {autoSpeak:state.autoSpeak});
 });
 $('reviewBtn').addEventListener('click', ()=> start(null, true));
-$('speakBtn').addEventListener('click', ()=> speak(state.queue[state.idx].w));
+$('speakBtn').addEventListener('click', ()=> speak(state.queue[state.idx]));
 $('submitBtn').addEventListener('click', submit);
 $('nextBtn').addEventListener('click', next);
 $('answer').addEventListener('keydown', e=>{
