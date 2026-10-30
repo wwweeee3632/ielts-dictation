@@ -202,6 +202,16 @@ function stopSpeech(){
 // ---------- utils ----------
 const $ = id => document.getElementById(id);
 function norm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[’‘`´]/g,"'"); }
+// 规范化词 -> 完整词条（含音频文件名 a），错词复习时用它还原发音
+const WORD_INDEX = {};
+(function(){
+  for(const ch of WORDS.chapters){
+    for(const w of ch.words){
+      const k = norm(w.w);
+      if(!(k in WORD_INDEX)) WORD_INDEX[k] = w;
+    }
+  }
+})();
 function shuffle(a){ const r=a.slice(); for(let i=r.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [r[i],r[j]]=[r[j],r[i]]; } return r; }
 
 // ---------- wrong words ----------
@@ -268,7 +278,7 @@ function start(chapterName, reviewing){
   let words;
   if(reviewing){
     const map = wrongMap();
-    words = Object.values(map).map(o=>({w:o.w, m:o.m}));
+    words = Object.values(map).map(o=> WORD_INDEX[norm(o.w)] || {w:o.w, m:o.m, a:null});
     if(words.length===0){ alert('还没有错词，先去练一练吧'); return; }
   } else {
     words = ch.words;
