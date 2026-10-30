@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>雅思听力语料库默写</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --text:#1c2333; --muted:#8a93a6;
+    --accent:#2f6bff; --accent-dark:#2453cc; --ok:#16a34a; --bad:#dc2626;
+    --border:#e5e8ef; --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.5;
+  }
+  .wrap{max-width:560px; margin:0 auto; padding:16px 16px 40px;}
+  header.app{
+    display:flex; align-items:center; gap:12px; padding:12px 0;
+  }
+  header.app h1{font-size:20px; margin:0; flex:1;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:14px;}
+  .stats{display:flex; gap:8px; flex-wrap:wrap;}
+  .stat{flex:1; min-width:80px; background:var(--bg); border-radius:12px; padding:10px; text-align:center;}
+  .stat .num{font-size:20px; font-weight:700;}
+  .stat .lbl{font-size:12px; color:var(--muted);}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  .seg{display:inline-flex; background:var(--bg); border:1px solid var(--border); border-radius:10px; overflow:hidden;}
+  .seg button{background:transparent; border:none; padding:8px 14px; font-size:14px; cursor:pointer; color:var(--muted);}
+  .seg button.on{background:var(--accent); color:#fff;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border:none; border-radius:12px; padding:12px 16px; font-size:15px; cursor:pointer;
+    background:var(--accent); color:#fff; font-weight:600; transition:.15s;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{background:var(--bg); color:var(--text); border:1px solid var(--border);}
+  .btn.big{width:100%; padding:15px; font-size:16px;}
+  .btn.ok{background:var(--ok);}
+  .section-title{font-size:13px; color:var(--muted); margin:16px 4px 8px; font-weight:600; letter-spacing:.5px;}
+  .ch{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:13px 14px; margin-bottom:8px; cursor:pointer; font-size:15px;
+  }
+  .ch .name{flex:1;}
+  .ch .cnt{color:var(--muted); font-size:13px;}
+  .ch:active{background:#f0f3fa;}
+
+  /* dictation screen */
+  #dict{display:none;}
+  .dict-head{display:flex; align-items:center; gap:8px; padding:6px 0 12px;}
+  .dict-head .back{font-size:22px; background:none; border:none; cursor:pointer; padding:4px 8px;}
+  .dict-head .title{flex:1; font-size:15px; font-weight:600; text-align:center;}
+  .dict-head .counter{font-size:13px; color:var(--muted); white-space:nowrap;}
+  .progress{height:8px; background:var(--border); border-radius:6px; overflow:hidden; margin-bottom:20px;}
+  .progress .bar{height:100%; background:var(--accent); width:0; transition:width .2s;}
+  .meaning{
+    text-align:center; font-size:34px; font-weight:700; padding:36px 12px;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:14px;
+    min-height:120px; display:flex; align-items:center; justify-content:center;
+  }
+  .hint{text-align:center; color:var(--muted); font-size:13px; margin-bottom:12px;}
+  .speak{width:100%; margin-bottom:14px;}
+  .speak .btn{background:#eef2ff; color:var(--accent-dark); border:1px solid #d4ddff;}
+  input.answer{
+    width:100%; padding:16px; font-size:20px; border:2px solid var(--border); border-radius:14px;
+    margin-bottom:12px; outline:none; text-align:center;
+  }
+  input.answer:focus{border-color:var(--accent);}
+  #feedback{min-height:60px; text-align:center; margin-bottom:10px;}
+  .fb{padding:14px; border-radius:12px; font-size:15px; font-weight:600;}
+  .fb.ok{background:#ecfdf3; color:var(--ok);}
+  .fb.bad{background:#fef2f2; color:var(--bad);}
+  .fb .correct{display:block; font-size:20px; margin-top:4px;}
+  .summary{text-align:center;}
+  .summary .big{font-size:40px; font-weight:800;}
+  .summary p{color:var(--muted);}
+  .foot{text-align:center; color:var(--muted); font-size:12px; margin-top:24px;}
+  .link{color:var(--accent); text-decoration:none;}
+  .tag{font-size:11px; background:#eef2ff; color:var(--accent-dark); border-radius:6px; padding:2px 6px; margin-left:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== Home ===== -->
+  <div id="home">
+    <header class="app"><h1>雅思听力语料库默写</h1></header>
+    <div class="card">
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="row">
+      <div class="seg" id="modeSeg">
+        <button data-mode="order" class="on">顺序</button>
+        <button data-mode="random">随机</button>
+      </div>
+      <label style="margin-left:auto; font-size:13px; color:var(--muted); display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="autoSpeak" checked> 自动发音
+      </label>
+    </div>
+    <button class="btn ghost big" id="reviewBtn" style="margin-bottom:16px;">🔁 错词复习（<span id="reviewCount">0</span>）</button>
+    <div id="chapterList"></div>
+  </div>
+
+  <!-- ===== Dictation ===== -->
+  <div id="dict">
+    <div class="dict-head">
+      <button class="back" id="backBtn">←</button>
+      <div class="title" id="dictTitle">章节</div>
+      <div class="counter" id="dictCounter"></div>
+    </div>
+    <div class="progress"><div class="bar" id="progressBar"></div></div>
+    <div class="meaning" id="meaning">—</div>
+    <div class="hint">听发音，输入对应的英文单词</div>
+    <div class="speak"><button class="btn" id="speakBtn">🔊 播放发音</button></div>
+    <input class="answer" id="answer" type="text" placeholder="输入英文单词" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button class="btn big" id="submitBtn">确认</button>
+    <div id="feedback"></div>
+    <button class="btn big ghost" id="nextBtn" style="display:none;">下一个 →</button>
+  </div>
+
+  <div class="foot">数据来源：剑桥雅思16 语料库练习模板 · 发音为浏览器语音合成</div>
+</div>
+
+<script>
+const WORDS = __WORDS_DATA__;
+
+// ---------- localStorage ----------
+const LS_WRONG = 'ielts_wrong_v1';
+const LS_STAT  = 'ielts_stat_v1';
+const LS_PREF  = 'ielts_pref_v1';
+const load = (k, d)=>{ try{ const v = localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } };
+const save = (k, v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+
+// ---------- state ----------
+let state = {
+  mode:'order', autoSpeak:true,
+  queue:[], idx:0, chapter:null, reviewing:false,
+  session:{done:0, correct:0}
+};
+
+// ---------- TTS ----------
+let voice = null;
+let _lastUtter = null; // 保留引用，防止 iOS 垃圾回收导致不发声
+function refreshVoices(){
+  try{
+    const vs = speechSynthesis.getVoices();
+    if(vs && vs.length){
+      voice = vs.find(v=>/^en[-_]GB/i.test(v.lang))
+           || vs.find(v=>/^en[-_]US/i.test(v.lang))
+           || vs.find(v=>/^en/i.test(v.lang))
+           || null;
+    }
+  }catch(e){}
+}
+if('speechSynthesis' in window){
+  speechSynthesis.onvoiceschanged = refreshVoices;
+  refreshVoices();
+  // 首次触摸/点击时预热语音引擎（部分手机浏览器需要一次交互才允许发声）
+  const warm = function(){ refreshVoices(); };
+  document.addEventListener('pointerdown', warm, {once:true});
+  document.addEventListener('touchstart', warm, {once:true});
+}
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    refreshVoices();
+    // iOS 上 cancel 后需稍等再 speak，否则可能静音
+    setTimeout(function(){
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = (voice && voice.lang) ? voice.lang : 'en-GB';
+        if(voice) u.voice = voice;
+        u.rate = 0.82;
+        u.volume = 1;
+        _lastUtter = u;
+        speechSynthesis.speak(u);
+      }catch(e){}
+    }, 60);
+  }catch(e){}
+}
+
+// ---------- utils ----------
+const $ = id => document.getElementById(id);
+function norm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[’‘`´]/g,"'"); }
+function shuffle(a){ const r=a.slice(); for(let i=r.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [r[i],r[j]]=[r[j],r[i]]; } return r; }
+
+// ---------- wrong words ----------
+function wrongMap(){ return load(LS_WRONG, {}); }
+function addWrong(w, chapter){
+  const map = wrongMap();
+  const k = norm(w.w);
+  if(map[k]){ map[k].times++; }
+  else { map[k] = { w:w.w, m:w.m, chapter:chapter.name, times:1 }; }
+  save(LS_WRONG, map);
+}
+function removeWrong(k){
+  const map = wrongMap(); delete map[k]; save(LS_WRONG, map);
+}
+
+// ---------- stats ----------
+function statMap(){ return load(LS_STAT, {}); }
+function addStat(chapter, correct){
+  const m = statMap();
+  const s = m[chapter.name] || {done:0, correct:0};
+  s.done++; if(correct) s.correct++;
+  m[chapter.name] = s;
+  save(LS_STAT, m);
+}
+
+// ---------- home render ----------
+const SECTION_LABEL = {'3':'第3章 · 名词','4':'第4章 · 形容词/副词','5':'第5章 · 吞音连读训练','8':'第8章 · 数字/字母/地址/日期','11':'第11章 · 综合测试'};
+function renderHome(){
+  // stats
+  const st = statMap();
+  let done=0, correct=0;
+  for(const k in st){ done+=st[k].done; correct+=st[k].correct; }
+  const totalWords = WORDS.chapters.reduce((a,c)=>a+c.words.length,0);
+  const wrongCount = Object.keys(wrongMap()).length;
+  const rate = done ? Math.round(correct/done*100) : 0;
+  $('stats').innerHTML =
+    `<div class="stat"><div class="num">${totalWords}</div><div class="lbl">总词数</div></div>`+
+    `<div class="stat"><div class="num">${done}</div><div class="lbl">已练</div></div>`+
+    `<div class="stat"><div class="num">${rate}%</div><div class="lbl">正确率</div></div>`+
+    `<div class="stat"><div class="num">${wrongCount}</div><div class="lbl">错词</div></div>`;
+  $('reviewCount').textContent = wrongCount;
+
+  // chapter list grouped by section
+  const groups = {};
+  for(const ch of WORDS.chapters){
+    const key = ch.name.split(' ')[0].split('.')[0];
+    (groups[key] = groups[key]||[]).push(ch);
+  }
+  const html = [];
+  for(const key of Object.keys(groups)){
+    html.push(`<div class="section-title">${SECTION_LABEL[key]||('第'+key+'章')}</div>`);
+    for(const ch of groups[key]){
+      const done = (st[ch.name]||{done:0}).done;
+      html.push(`<button class="ch" data-name="${ch.name}"><span class="name">${ch.name}</span><span class="cnt">${done}/${ch.words.length}</span></button>`);
+    }
+  }
+  $('chapterList').innerHTML = html.join('');
+}
+
+// ---------- dictation flow ----------
+function start(chapterName, reviewing){
+  const ch = WORDS.chapters.find(c=>c.name===chapterName);
+  if(!ch) return;
+  let words;
+  if(reviewing){
+    const map = wrongMap();
+    words = Object.values(map).map(o=>({w:o.w, m:o.m}));
+    if(words.length===0){ alert('还没有错词，先去练一练吧'); return; }
+  } else {
+    words = ch.words;
+  }
+  state.chapter = reviewing ? {name:'错词复习', words} : ch;
+  state.reviewing = reviewing;
+  state.queue = state.mode==='random' ? shuffle(words) : words.slice();
+  state.idx = 0;
+  state.session = {done:0, correct:0};
+  $('home').style.display='none';
+  $('dict').style.display='block';
+  $('dictTitle').textContent = state.chapter.name;
+  showWord();
+}
+
+function showWord(){
+  const w = state.queue[state.idx];
+  $('meaning').textContent = w.m || w.w;
+  $('answer').value='';
+  $('answer').focus();
+  $('feedback').innerHTML='';
+  $('submitBtn').style.display='';
+  $('nextBtn').style.display='none';
+  $('dictCounter').textContent = `${state.idx+1}/${state.queue.length}`;
+  $('progressBar').style.width = `${(state.idx/state.queue.length)*100}%`;
+  if(state.autoSpeak) speak(w.w);
+}
+
+function submit(){
+  const w = state.queue[state.idx];
+  const input = $('answer').value;
+  if(norm(input)===''){
+    $('answer').focus();
+    return;
+  }
+  const ok = norm(input) === norm(w.w);
+  if(ok){
+    $('feedback').innerHTML = `<div class="fb ok">✓ 正确</div>`;
+    // remove from wrong list if it was previously wrong
+    removeWrong(norm(w.w));
+  } else {
+    $('feedback').innerHTML = `<div class="fb bad">✗ 错误<span class="correct">${w.w}</span></div>`;
+    if(!state.reviewing) addWrong(w, state.chapter);
+  }
+  if(!state.reviewing) addStat(state.chapter, ok);
+  state.session.done++; if(ok) state.session.correct++;
+  $('submitBtn').style.display='none';
+  $('nextBtn').style.display='';
+  $('nextBtn').textContent = state.idx+1>=state.queue.length ? '完成' : '下一个 →';
+  $('nextBtn').focus();
+}
+
+function next(){
+  if(state.idx+1 >= state.queue.length){
+    finish();
+    return;
+  }
+  state.idx++;
+  showWord();
+}
+
+function finish(){
+  const d = state.session.done, c = state.session.correct;
+  const rate = d ? Math.round(c/d*100) : 0;
+  $('progressBar').style.width = '100%';
+  $('meaning').style.display='none';
+  $('answer').style.display='none';
+  $('submitBtn').style.display='none';
+  $('nextBtn').style.display='none';
+  $('speakBtn').style.display='none';
+  $('dictTitle').textContent = '完成';
+  $('dictCounter').textContent = '';
+  $('feedback').innerHTML = `
+    <div class="summary">
+      <div class="big">${rate}%</div>
+      <p>本组 ${d} 词，答对 ${c} 词，答错 ${d-c} 词</p>
+      <button class="btn big" id="againBtn">再来一遍</button>
+      <button class="btn ghost big" id="homeBtn" style="margin-top:8px;">返回首页</button>
+    </div>`;
+  $('againBtn').onclick = ()=> start(state.chapter.name, state.reviewing);
+  $('homeBtn').onclick = backHome;
+}
+
+function backHome(){
+  speechSynthesis.cancel();
+  $('dict').style.display='none';
+  $('home').style.display='block';
+  // restore hidden elements
+  $('meaning').style.display='';
+  $('answer').style.display='';
+  $('submitBtn').style.display='';
+  $('speakBtn').style.display='';
+  renderHome();
+}
+
+// ---------- events ----------
+$('chapterList').addEventListener('click', e=>{
+  const btn = e.target.closest('.ch');
+  if(btn) start(btn.dataset.name, false);
+});
+$('modeSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  state.mode = b.dataset.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+  save(LS_PREF, {mode:state.mode});
+});
+$('autoSpeak').addEventListener('change', e=>{
+  state.autoSpeak = e.target.checked;
+  save(LS_PREF, {autoSpeak:state.autoSpeak});
+});
+$('reviewBtn').addEventListener('click', ()=> start(null, true));
+$('speakBtn').addEventListener('click', ()=> speak(state.queue[state.idx].w));
+$('submitBtn').addEventListener('click', submit);
+$('nextBtn').addEventListener('click', next);
+$('answer').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    if($('nextBtn').style.display!=='none') next();
+    else submit();
+  }
+});
+$('backBtn').addEventListener('click', backHome);
+
+// ---------- init ----------
+(function init(){
+  const p = load(LS_PREF, {});
+  if(p.mode) state.mode = p.mode;
+  if(typeof p.autoSpeak==='boolean') state.autoSpeak = p.autoSpeak;
+  $('autoSpeak').checked = state.autoSpeak;
+  $('modeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.mode===state.mode));
+  renderHome();
+})();
+</script>
+</body>
+</html>
